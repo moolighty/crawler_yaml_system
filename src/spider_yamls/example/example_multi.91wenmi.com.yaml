@@ -1,0 +1,191 @@
+# 对应的爬虫名称，候选项通过scrapy list命令可以查看，定义位于src/spiders目录下
+spider_name: multi_detail_pages
+
+# 爬取网站的名称,url,描述
+site_details:
+    site_name: 文秘网
+    site_url: http://www.91wenmi.com/daohang.html
+    site_description: 文秘网范文抓取
+
+# 1.允许的域名列表
+allowed_domains:
+    - www.91wenmi.com # 注意域名的限制
+
+# 2.该网站spider自定义配置
+custom_settings:
+    # Pipelines指定,主要是对item提取出来之后,item的加工处理和流向,
+    # 数字越小,优先级越大, 即item先流向优先级大的,处理后的item会流向次之优先级的pipeline
+    ITEM_PIPELINES:
+        src.pipelines.initialize_item.InitializeItemPipeline: 100
+        src.pipelines.duplicate_filter_by_compute_id.DuplicatesFilterByComputeIdPipeline: 200
+        src.pipelines.check_item_fields.CheckItemFieldsValidityPipeline: 300
+        src.pipelines.save_item_to_file.SaveFileToLocaleByCategoryPipeline: 400
+        # src.pipelines.save_item_to_kafka.SaveItemToKafkaPipeline: 500
+    LOG_FILE : www.91wenmi.com  # 保存爬虫运行情况的日志文件名称
+    LOG_LEVEL: INFO  # 级别有DEBUG, INFO, WARNING, ERROR
+    CONCURRENT_REQUESTS: 4
+    CONCURRENT_REQUESTS_PER_DOMAIN: 4
+    CONCURRENT_REQUESTS_PER_IP: 4
+
+# 3.初始种子生成规则: 爬虫启动需要一批种子url
+start_seeds_rules:
+    detail_page_flag: false # 初始种子是否就是详情页,即产生最终结果item的页面, 默认置为为false
+    check_before_request_flag: false  # 发出请求之前先判断是否之前请求过,避免重复请求，主要用来实现增量抓取
+    depth: 0  # 初始请求的深度默认定位0
+    request_factory_class: src.requestfactorys.DepthRequestFactory  # 主要用来生成对应的Reqeust对象
+    category_urls:
+        category_1: #类别种类命名理论上可以取任意名称，这里统一为category_n形式，n取值正整数
+            - http://www.91wenmi.com/daohang.html
+    callback_urls: {}
+
+# 4.用于生成request对象的params设置规则,主要涉及到请求头部参数，同时跟导航深度depth有关
+request_params_rules:
+    common_headers:
+        Cookie: 'ASPSESSIONIDCSRCBRQR=JPAJHBDCNIBMJHOAMHIJGDKA; UM_distinctid=16abf7c6fde1ba-0ca92cbb03ed4a-15231708-1fa400-16abf7c6fdf129; ASPSESSIONIDSQQCSBCR=DAGEPFCCNOENEGAFMECHNLFK; Hm_lvt_9c641912f8e9547aed7fc7673fd2029b=1557990766,1558484596; CNZZDATA2016408=cnzz_eid%3D426295922-1557989184-https%253A%252F%252Fwww.google.com%252F%26ntime%3D1558482994; Hm_lpvt_9c641912f8e9547aed7fc7673fd2029b=1558485298'
+        Host: www.91wenmi.com
+    depth_headers:
+        - depths: [0, 1, 2, 3]
+          params:
+              method: GET
+              headers: {}
+              body: ''
+              formdata: {}
+              cookies: {}
+              meta: {}
+              dont_filter: false
+              encoding: gbk
+
+# 5.导航页链接和详情页多页时链接提取规则，用于生成request, 支持xml,html,json，re等方式提取,
+#   根据depth和category来选择对应链接的提取方式
+link_extractor_rules:
+    # 导航页链接提取规则
+    nav_link_settings:
+        - depth: 1
+          category: category_1 # 类别种类命名理论上可以取任意名称，这里统一为category_n形式，n取值正整数
+          request_factory_class: src.requestfactorys.DepthRequestFactory
+          meta:
+              check_before_request_flag: false
+              next_page_flag: false
+              json_re: ''
+              dont_filter: false   # 默认去重
+          link_extractor_settings:
+              link_extractor_class: scrapy.linkextractors.LinkExtractor  #src.misc.json_link_extractor.JsonLinkExtractor
+              params:   # 对应类初始化对应的参数, 参数名称不能错
+                  allow: https?://www\.91wenmi\.com/wenmi/.*
+                  restrict_xpaths: //table/tr[1]/following-sibling::tr/td/ul/li/a # 注意不要加上tbody
+          callback:
+          cb_kwargs: {}
+          follow:
+          process_links:
+          process_request:
+        - depth: 2
+          category: category_1 # 类别种类命名理论上可以取任意名称，这里统一为category_n形式，n取值正整数
+          request_factory_class: src.requestfactorys.DepthRequestFactory
+          meta:
+              check_before_request_flag: false
+              next_page_flag: true
+              json_re: ''
+              dont_filter: false   # 默认去重
+          link_extractor_settings:
+              link_extractor_class: scrapy.linkextractors.LinkExtractor  #src.misc.json_link_extractor.JsonLinkExtractor
+              params:   # 对应类初始化对应的参数, 参数名称不能错
+                  allow: .*/index_\d+\.html
+                  restrict_xpaths: //div[@class="cpage"]/a[contains(text(), "下一页")]
+          callback:
+          cb_kwargs: {}
+          follow:
+          process_links:
+          process_request:
+        - depth: 2
+          category: category_1 # 类别种类命名理论上可以取任意名称，这里统一为category_n形式，n取值正整数
+          request_factory_class: src.requestfactorys.DepthRequestFactory
+          meta:
+              check_before_request_flag: true
+              next_page_flag: false
+              json_re: ''
+              dont_filter: false   # 默认去重
+          link_extractor_settings:
+              link_extractor_class: scrapy.linkextractors.LinkExtractor  #src.misc.json_link_extractor.JsonLinkExtractor
+              params:   # 对应类初始化对应的参数, 参数名称不能错
+                  allow: .*/\d+\.html
+                  restrict_xpaths: //div[@class="mainL"]/dl/dt/a
+          callback: parse_item
+          cb_kwargs: {}
+          follow:
+          process_links:
+          process_request:
+    # 详情页下一页链接提取规则
+    details_next_page_settings:
+        next_page_flag: true
+        merge_fields: [urls, body]
+        extractors:
+            - depth: 3
+              request_factory_class: src.requestfactorys.DepthRequestFactory
+              xpath: '//div[@id="ipage"]/a[contains(text(), "下一页")]/@href'
+              regex: '.*/\d+_\d{1,2}\.html' # http://www.91wenmi.com/wenmi/jianghua/zhengfuzhengwu/2012-12-21/20121221236954_2.html
+
+# 6.详情页item(即特征)提取规则, 根据category来选择相应特征的提取方式
+item_extractor_rules:
+    item_class: src.items.BaseItem
+    item_loader_class: src.loaders.specials.www_wenmi_com.WenmiItemLoader
+    # 随着历史的变迁，一个网站可能有多种完全不同的解析方式
+    # 元素格式:category_m => [case_1, case_2, ..., case_n]
+    category_cases_relations:
+        category_1: [case_1]
+    extractor_type: 'xml'     # or "json", 根据此选择后面的提取器
+    xml_field_extractors:
+        case_1:
+            # 一个字段可能有多种提取方式，所以是数组类型，下标大小决定优先级
+            urls:
+                - type: response_attr
+                  param: url
+                  regex: ''
+            title:
+                - type: response_meta_attr
+                  param: link_text
+                  regex: ''
+            'organization_name':
+                - type: value
+                  param: '文秘网'
+                  regex: ''
+            tags:
+                - type: xpath
+                  param: '//div[@class="crumbs"]/a/text()'
+                  regex: ''
+            body:
+                - type: xpath
+                  param: '//div[@id="content"]'
+                  regex: ''
+            category:
+                - type: xpath
+                  param: '//div[@class="crumbs"]/a/text()'
+                  regex: ''
+            email:
+                - type: value
+                  param: 'liangchuanjian@kingsoft.com'
+                  regex: ''
+    json_field_extractors:
+        case_1:
+            # 对应json path query language, 请参考jmepath库和scrapy.loader.processors.SelectJmes类
+            json_path: '' # 'data[*].question.user.{urls: avatar_url, title: uname}'
+            encoding: utf-8
+
+# 7. item字段检查规则
+item_field_check_rules:
+    - callback: src.misc.field_checker.check_field_list_in_item
+      params: [_id, urls, body]
+    - callback: src.misc.field_checker.check_field_list_len_validity
+      params:
+          title: 1
+          body: 50
+
+# 8. item去重规则, 根据id去重
+item_reduplicate_rules:
+    reduplicate_flag: true
+    id_compute_method: src.utils.coding_conversion.get_md5
+    fields: [body]
+
+# 9. item存入文件的规则
+item_file_rules:
+    parent_dir: ''
+    file_suffix: '.json'
