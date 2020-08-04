@@ -3,12 +3,11 @@
 ## 项目目录
 ---
 ```
-src/        --- 核心代码目录
+src/           # 核心代码目录
 ---configs/         # 爬虫配置文件目录
 ---items/           # item特征字段定义
 ---loaders/         # itemloader 主要是特征字段清洗规则定义
     ---specials         # 具体网站特殊处理
----main/            # 启动入口脚本
 ---middlewares/     # 爬虫中间件定义
 ---misc/            # 其他(不适合放在其他目录的类或者功能法官法)
 ---pipelines/       # 用于item处理的pipeline
